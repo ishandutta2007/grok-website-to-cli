@@ -40,7 +40,14 @@ class GrokBridge:
     @property
     def is_connected(self) -> bool:
         """Whether the extension is currently connected."""
-        return self._extension_ws is not None and self._extension_ws.open
+        if self._extension_ws is None:
+            return False
+        # Support both legacy WebSocketServerProtocol (.open) and new ServerConnection (.state)
+        if hasattr(self._extension_ws, "open"):
+            return self._extension_ws.open
+        if hasattr(self._extension_ws, "state"):
+            return getattr(self._extension_ws.state, "name", "") == "OPEN"
+        return True
 
     async def start(self) -> None:
         """Start the WebSocket server on localhost."""
