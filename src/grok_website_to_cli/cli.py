@@ -62,9 +62,7 @@ def _write_output(content: str, output_path: str | None) -> None:
         with open(path, "a", encoding="utf-8") as f:
             f.write(content)
             f.write("\n")
-        console.print(
-            f"\n[green]+[/green] Output appended to [bold]{path}[/bold]"
-        )
+        console.print(f"\n[green]+[/green] Output appended to [bold]{path}[/bold]")
     else:
         console.print()
         console.print(
@@ -99,21 +97,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to a text file containing the prompt to send to Grok.",
     )
     parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         metavar="FILE",
         default=None,
         help="Path to output file. Result will be appended. "
-             "If not specified, output is printed to terminal.",
+        "If not specified, output is printed to terminal.",
     )
     parser.add_argument(
-        "-w", "--max-wait",
+        "-w",
+        "--max-wait",
         type=int,
         default=180,
         metavar="SECONDS",
         help="Maximum seconds to wait for Grok response (default: 180).",
     )
     parser.add_argument(
-        "-p", "--port",
+        "-p",
+        "--port",
         type=int,
         default=DEFAULT_PORT,
         metavar="PORT",
@@ -125,7 +126,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Extract the full response text instead of just the last code block.",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose/debug logging.",
     )
@@ -156,8 +158,7 @@ async def async_main(args: argparse.Namespace) -> int:
         return 1
 
     console.print(
-        f"[dim]Prompt loaded ({len(prompt_text)} chars) from:[/dim] "
-        f"{args.prompt_file}"
+        f"[dim]Prompt loaded ({len(prompt_text)} chars) from:[/dim] {args.prompt_file}"
     )
 
     # ── Start bridge server ───────────────────────────────────────────
@@ -198,9 +199,7 @@ async def async_main(args: argparse.Namespace) -> int:
             max_wait_seconds=args.max_wait,
         )
 
-        with console.status(
-            "[bold blue]Finding or opening Grok tab...[/bold blue]"
-        ):
+        with console.status("[bold blue]Finding or opening Grok tab...[/bold blue]"):
             await grok.find_or_open_grok_tab()
         console.print("[green]+[/green] Grok tab is active")
 
@@ -222,9 +221,7 @@ async def async_main(args: argparse.Namespace) -> int:
         console.print("[green]+[/green] Response received")
 
         # ── Extract result ────────────────────────────────────────────
-        with console.status(
-            "[bold blue]Extracting code block...[/bold blue]"
-        ):
+        with console.status("[bold blue]Extracting code block...[/bold blue]"):
             if args.full_response:
                 result = await grok.extract_full_response()
             else:

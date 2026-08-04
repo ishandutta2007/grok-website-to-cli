@@ -165,6 +165,8 @@ class GrokBridge:
             for future in self._pending.values():
                 if not future.done():
                     future.set_exception(
-                        ConnectionError("Extension disconnected while waiting for response.")
+                        ConnectionError(
+                            "Extension disconnected while waiting for response."
+                        )
                     )
             self._pending.clear()

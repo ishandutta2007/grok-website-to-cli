@@ -84,9 +84,7 @@ class GrokAutomation:
         """
         import asyncio
 
-        logger.info(
-            "Waiting for Grok response (up to %ds)...", self.max_wait_seconds
-        )
+        logger.info("Waiting for Grok response (up to %ds)...", self.max_wait_seconds)
 
         # Initial delay to let generation start
         await asyncio.sleep(5)
@@ -184,9 +182,7 @@ class GrokAutomation:
             The full response text, or None if nothing was found.
         """
         try:
-            result = await self.bridge.send_command(
-                "extract_full_response", timeout=15
-            )
+            result = await self.bridge.send_command("extract_full_response", timeout=15)
             text = result.get("text")
             if text:
                 logger.info("Extracted full response (%d chars).", len(text))
