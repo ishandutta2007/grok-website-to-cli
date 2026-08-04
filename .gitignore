@@ -1,7 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+*.env
+.env.*
+!.env.example
+
+# Project
+.cache/
+contributors.txt
+temp_repo_clone/
 *.bak
 *.bk
-*.env
-.cache
-__pycache__/
-contributors.txt
-temp_repo_clone
+
+# Edge profile (created at runtime)
+grok-cli-edge-profile/
