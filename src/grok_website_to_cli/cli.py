@@ -89,6 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  grok-cli prompt.txt                    # Display result in terminal\n"
             "  grok-cli prompt.txt -o output.py       # Append result to output.py\n"
             "  grok-cli prompt.txt -o out.py -w 300   # Wait up to 5 minutes\n"
+            "  grok-cli prompt.txt --browser chrome   # Use Chrome instead of Edge\n"
             "  grok-cli prompt.txt -v                 # Verbose logging\n"
         ),
     )
@@ -132,6 +133,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable verbose/debug logging.",
     )
     parser.add_argument(
+        "-b",
+        "--browser",
+        choices=["edge", "chrome"],
+        default="edge",
+        help="Browser to use (default: edge).",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -162,7 +170,10 @@ async def async_main(args: argparse.Namespace) -> int:
     )
 
     # ── Start bridge server ───────────────────────────────────────────
-    bridge = GrokBridge(port=args.port)
+    browser_name = "Chrome" if args.browser == "chrome" else "Edge"
+    extensions_url = "chrome://extensions" if args.browser == "chrome" else "edge://extensions"
+
+    bridge = GrokBridge(port=args.port, browser_name=browser_name)
 
     try:
         await bridge.start()
@@ -174,7 +185,7 @@ async def async_main(args: argparse.Namespace) -> int:
         # ── Wait for extension ────────────────────────────────────────
         with console.status(
             "[bold blue]Waiting for Grok CLI Bridge extension to connect...[/bold blue]\n"
-            "[dim]Make sure the extension is installed and enabled in Edge[/dim]",
+            f"[dim]Make sure the extension is installed and enabled in {browser_name}[/dim]",
             spinner="dots",
         ):
             try:
@@ -184,7 +195,7 @@ async def async_main(args: argparse.Namespace) -> int:
                 console.print(
                     "\n[yellow]Setup:[/yellow] Load the extension from the "
                     "[bold]extension/[/bold] folder:\n"
-                    "  1. Open [bold]edge://extensions[/bold]\n"
+                    f"  1. Open [bold]{extensions_url}[/bold]\n"
                     "  2. Enable [bold]Developer mode[/bold]\n"
                     "  3. Click [bold]Load unpacked[/bold] and select the "
                     "[bold]extension/[/bold] directory\n"

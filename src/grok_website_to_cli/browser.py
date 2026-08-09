@@ -30,8 +30,9 @@ class GrokBridge:
     this bridge. Each command gets a unique ID so responses can be matched.
     """
 
-    def __init__(self, port: int = DEFAULT_PORT) -> None:
+    def __init__(self, port: int = DEFAULT_PORT, browser_name: str = "Edge") -> None:
         self.port = port
+        self.browser_name = browser_name
         self._extension_ws: Optional[WebSocketServerProtocol] = None
         self._pending: dict[str, asyncio.Future] = {}
         self._connected = asyncio.Event()
@@ -82,7 +83,7 @@ class GrokBridge:
         except asyncio.TimeoutError:
             raise TimeoutError(
                 f"Browser extension did not connect within {int(timeout)}s.\n"
-                "Make sure the 'Grok CLI Bridge' extension is installed and enabled in Edge.\n"
+                f"Make sure the 'Grok CLI Bridge' extension is installed and enabled in {self.browser_name}.\n"
                 "The extension auto-connects when the CLI server is running."
             )
 
@@ -110,7 +111,7 @@ class GrokBridge:
         if not self.is_connected:
             raise ConnectionError(
                 "Extension is not connected. "
-                "Check that the Grok CLI Bridge extension is running in Edge."
+                f"Check that the Grok CLI Bridge extension is running in {self.browser_name}."
             )
 
         msg_id = str(uuid.uuid4())
