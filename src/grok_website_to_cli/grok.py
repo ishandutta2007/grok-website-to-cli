@@ -9,6 +9,7 @@ inside the user's real Edge browser session.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Optional
@@ -59,22 +60,53 @@ class GrokAutomation:
             logger.info("Opened new Grok tab (id=%d)", tab_id)
             return tab_id
 
-    async def send_prompt(self, prompt_text: str) -> None:
+    async def send_prompt(
+        self,
+        prompt_text: str,
+        max_retries: int = 5,
+        retry_delay: float = 3.0,
+    ) -> None:
         """Send a prompt to the Grok input box.
 
         The extension's content script handles finding the input element,
         setting the value (React-compatible), and submitting with Enter.
 
+        Retries up to ``max_retries`` times on transient failures
+        (timeouts, disconnections, extension errors).
+
         Args:
             prompt_text: The full prompt text to send.
+            max_retries: Maximum number of send attempts.
+            retry_delay: Seconds to wait between retries.
         """
         logger.info("Sending prompt to Grok (%d chars)...", len(prompt_text))
-        await self.bridge.send_command(
-            "send_prompt",
-            prompt=prompt_text,
-            timeout=15,
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                await self.bridge.send_command(
+                    "send_prompt",
+                    prompt=prompt_text,
+                    timeout=30,
+                )
+                logger.info(
+                    "Prompt submitted successfully (attempt %d/%d).",
+                    attempt, max_retries,
+                )
+                return
+            except (ConnectionError, TimeoutError, RuntimeError, OSError) as exc:
+                logger.warning(
+                    "send_prompt failed (attempt %d/%d): %s",
+                    attempt, max_retries, exc,
+                )
+                if attempt < max_retries:
+                    logger.info(
+                        "Retrying send_prompt in %.1fs...", retry_delay
+                    )
+                    await asyncio.sleep(retry_delay)
+
+        raise RuntimeError(
+            f"Failed to send prompt after {max_retries} attempts."
         )
-        logger.info("Prompt submitted successfully.")
 
     async def wait_for_response(self) -> None:
         """Wait for Grok to finish generating its response.
@@ -82,7 +114,6 @@ class GrokAutomation:
         Polls the extension's content script for response status until
         generation is complete or the timeout is reached.
         """
-        import asyncio
 
         logger.info("Waiting for Grok response (up to %ds)...", self.max_wait_seconds)
 
@@ -147,49 +178,111 @@ class GrokAutomation:
                 "Timed out after %ds while waiting for response.", self.max_wait_seconds
             )
 
-    async def extract_last_code_block(self) -> Optional[str]:
+    async def extract_last_code_block(
+        self,
+        max_retries: int = 5,
+        retry_delay: float = 3.0,
+    ) -> Optional[str]:
         """Extract the text of the last code block from the Grok response.
 
         The extension tries multiple strategies:
         1. Click the copy button on the code block
         2. Read innerText directly
 
-        Returns:
-            The code block text, or None if no code blocks were found.
-        """
-        try:
-            result = await self.bridge.send_command(
-                "extract_last_code_block", timeout=15
-            )
-            text = result.get("text")
-            if text:
-                method = result.get("method", "unknown")
-                logger.info(
-                    "Extracted code block (%d chars) via %s.", len(text), method
-                )
-                return text.strip()
-            else:
-                logger.warning("No code blocks found in the response.")
-                return None
-        except RuntimeError as exc:
-            logger.warning("Code block extraction failed: %s", exc)
-            return None
+        Retries up to ``max_retries`` times on transient failures (empty
+        result, connection errors, or extension errors) with a delay between
+        each attempt.
 
-    async def extract_full_response(self) -> Optional[str]:
+        Args:
+            max_retries: Maximum number of extraction attempts.
+            retry_delay: Seconds to wait between retries.
+
+        Returns:
+            The code block text, or None if no code blocks were found after
+            all retries.
+        """
+        for attempt in range(1, max_retries + 1):
+            try:
+                result = await self.bridge.send_command(
+                    "extract_last_code_block", timeout=15
+                )
+                text = result.get("text")
+                if text:
+                    method = result.get("method", "unknown")
+                    logger.info(
+                        "Extracted code block (%d chars) via %s (attempt %d/%d).",
+                        len(text), method, attempt, max_retries,
+                    )
+                    return text.strip()
+                else:
+                    logger.warning(
+                        "No code blocks found (attempt %d/%d).",
+                        attempt, max_retries,
+                    )
+            except (RuntimeError, ConnectionError, OSError) as exc:
+                logger.warning(
+                    "Code block extraction failed (attempt %d/%d): %s",
+                    attempt, max_retries, exc,
+                )
+
+            if attempt < max_retries:
+                logger.info(
+                    "Retrying code block extraction in %.1fs...", retry_delay
+                )
+                await asyncio.sleep(retry_delay)
+
+        logger.warning(
+            "Could not extract code block after %d attempts.", max_retries
+        )
+        return None
+
+    async def extract_full_response(
+        self,
+        max_retries: int = 5,
+        retry_delay: float = 3.0,
+    ) -> Optional[str]:
         """Extract the full text of the latest Grok response.
 
+        Retries up to ``max_retries`` times on transient failures.
+
+        Args:
+            max_retries: Maximum number of extraction attempts.
+            retry_delay: Seconds to wait between retries.
+
         Returns:
-            The full response text, or None if nothing was found.
+            The full response text, or None if nothing was found after all
+            retries.
         """
-        try:
-            result = await self.bridge.send_command("extract_full_response", timeout=15)
-            text = result.get("text")
-            if text:
-                logger.info("Extracted full response (%d chars).", len(text))
-                return text.strip()
-            else:
-                logger.warning("No response content found.")
-                return None
-        except RuntimeError as exc:
-            logger.warning("Full response extraction failed: %s", exc)
-            return None
+        for attempt in range(1, max_retries + 1):
+            try:
+                result = await self.bridge.send_command(
+                    "extract_full_response", timeout=15
+                )
+                text = result.get("text")
+                if text:
+                    logger.info(
+                        "Extracted full response (%d chars, attempt %d/%d).",
+                        len(text), attempt, max_retries,
+                    )
+                    return text.strip()
+                else:
+                    logger.warning(
+                        "No response content found (attempt %d/%d).",
+                        attempt, max_retries,
+                    )
+            except (RuntimeError, ConnectionError, OSError) as exc:
+                logger.warning(
+                    "Full response extraction failed (attempt %d/%d): %s",
+                    attempt, max_retries, exc,
+                )
+
+            if attempt < max_retries:
+                logger.info(
+                    "Retrying full response extraction in %.1fs...", retry_delay
+                )
+                await asyncio.sleep(retry_delay)
+
+        logger.warning(
+            "Could not extract full response after %d attempts.", max_retries
+        )
+        return None
