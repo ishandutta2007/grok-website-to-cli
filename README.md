@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="grok-website-to-cli Banner" width="100%" />
+</p>
+
 # grok-website-to-cli
 
 **RPA-powered CLI tool that converts [Grok](https://grok.com) website interactions into a command-line interface using a paired browser extension.**
