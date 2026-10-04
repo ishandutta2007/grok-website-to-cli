@@ -144,7 +144,8 @@ async function handleCommand(msg) {
       case 'send_prompt':
       case 'check_response_status':
       case 'extract_last_code_block':
-      case 'extract_full_response': {
+      case 'extract_full_response':
+      case 'diagnose': {
         const targetTab = await findGrokTab();
         if (!targetTab) {
           throw new Error('No Grok tab found. Open grok.com first.');

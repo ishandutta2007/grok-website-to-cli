@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from typing import Optional
 
 from grok_website_to_cli.browser import GrokBridge
@@ -81,6 +80,16 @@ class GrokAutomation:
         """
         logger.info("Sending prompt to Grok (%d chars)...", len(prompt_text))
 
+        # Capture initial footer count before sending
+        try:
+            initial_status = await self.bridge.send_command(
+                "check_response_status", timeout=5
+            )
+            diag = initial_status.get("diag", {})
+            self._initial_footer_count = diag.get("actionFooters", 0)
+        except Exception:
+            self._initial_footer_count = 0
+
         for attempt in range(1, max_retries + 1):
             try:
                 await self.bridge.send_command(
@@ -110,19 +119,22 @@ class GrokAutomation:
     async def wait_for_response(self) -> None:
         """Wait for Grok to finish generating its response.
 
-        Polls the extension's content script for response status until
-        generation is complete or the timeout is reached.
+        Strategy: Grok removes the last action footer ("Create share link"
+        button) while generating and restores it when done. We detect
+        generation completion by watching for the footer count to
+        INCREASE between consecutive polls (the dip → recovery pattern).
         """
 
-        logger.info("Waiting for Grok response (up to %ds)...", self.max_wait_seconds)
+        logger.info(
+            "Waiting for Grok response (up to %ds)... [v1-footer-dip]",
+            self.max_wait_seconds,
+        )
 
         # Initial delay to let generation start
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
 
         start_time = asyncio.get_event_loop().time()
-        was_generating = False
-        last_code_block_count = 0
-        stable_count = 0
+        prev_footers = None  # footer count from previous poll
 
         while (asyncio.get_event_loop().time() - start_time) < self.max_wait_seconds:
             try:
@@ -130,52 +142,39 @@ class GrokAutomation:
                     "check_response_status", timeout=10
                 )
             except Exception as exc:
-                logger.debug("Status check failed: %s", exc)
+                logger.info("Status check failed: %s", exc)
                 await asyncio.sleep(self.poll_interval)
                 continue
 
-            generating = status.get("generating", False)
-            code_block_count = status.get("codeBlockCount", 0)
-            has_response = status.get("hasResponse", False)
+            diag = status.get("diag", {})
+            footer_count = diag.get("actionFooters", 0)
             elapsed = int(asyncio.get_event_loop().time() - start_time)
 
-            if generating:
-                was_generating = True
-                stable_count = 0
-                logger.debug("Still generating... (%ds elapsed)", elapsed)
-            elif was_generating:
-                # Was generating but stopped — response is likely complete
-                logger.info("Generation complete after %ds.", elapsed)
-                await asyncio.sleep(2)  # Grace period for DOM to settle
-                return
-            elif has_response:
-                # Response appeared without us detecting a loading state
-                # Wait for code block count to stabilize
-                if code_block_count == last_code_block_count and code_block_count > 0:
-                    stable_count += 1
-                    if stable_count >= 3:
-                        logger.info(
-                            "Response appears stable (%d code blocks, %ds elapsed).",
-                            code_block_count,
-                            elapsed,
-                        )
-                        await asyncio.sleep(2)
-                        return
-                else:
-                    stable_count = 0
+            logger.info(
+                "Poll: footers=%d prev=%s elapsed=%ds diag=%s",
+                footer_count,
+                prev_footers,
+                elapsed,
+                diag,
+            )
 
-            last_code_block_count = code_block_count
+            # Detect footer count INCREASING between polls.
+            # During generation the count dips; when done it recovers.
+            if prev_footers is not None and footer_count > prev_footers:
+                logger.info(
+                    "DONE! Footers went %d → %d. Returning.",
+                    prev_footers,
+                    footer_count,
+                )
+                await asyncio.sleep(0.5)
+                return
+
+            prev_footers = footer_count
             await asyncio.sleep(self.poll_interval)
 
-        if not was_generating:
-            logger.warning(
-                "No loading indicator detected. Response may already be present."
-            )
-            await asyncio.sleep(5)
-        else:
-            logger.warning(
-                "Timed out after %ds while waiting for response.", self.max_wait_seconds
-            )
+        logger.warning(
+            "Timed out after %ds while waiting for response.", self.max_wait_seconds
+        )
 
     async def extract_last_code_block(
         self,
